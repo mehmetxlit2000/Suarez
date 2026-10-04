@@ -29,11 +29,12 @@ STATE_ROBOT_CONTROL = False
 STATE_MACHINE_TEST = False
 STATE_MACHINE = "APP_INIT"
 STATE_MACHINE_COUNT = 0
-STATE_MACHINE_MAX_COUNT = 5
+STATE_MACHINE_MAX_COUNT = 4
 STATE_MACHINE_SYNC_COUNT = 0
 STATE_MACHINE_STUCK = False
 previous_state = STATE_MACHINE
 freeze_variant = ["Buz gibiyim 🧊", "🧊", "🥶", "Dışar da kar mı yağıyor ❄️", "❄️", "Dondummm 🥶", "🐧", "Kardan adam yapsak senlee ☃️", "Battaniye lazım 🧣"]
+
 # Önbellek için global değişkenler
 _last_screen_hash = None
 _last_ocr_result = ""
@@ -537,11 +538,9 @@ def freeze_reset():
     STATE_MACHINE_STUCK = False
     bot_log('FREEZE_RESET')
 
-def freeze_detect(email_text,platform,password_text):
-
-    global STATE_MACHINE,STATE_MACHINE_COUNT,STATE_MACHINE_MAX_COUNT,STATE_MACHINE_STUCK,previous_state,freeze_variant
+def freeze_detect(email_text, platform, password_text):
+    global STATE_MACHINE, STATE_MACHINE_COUNT, STATE_MACHINE_MAX_COUNT, STATE_MACHINE_STUCK, previous_state, freeze_variant
     p_lower = str(platform).lower()
-#     bot_log(f'FREEZE_COUNT {STATE_MACHINE_COUNT}')
 
     def log_to_database(status_message):
         try:
@@ -564,10 +563,15 @@ def freeze_detect(email_text,platform,password_text):
         bot_log(f"{email_text} - State aşımı ({STATE_MACHINE} aşamasında takıldı)")
 
     def freeze_limit_count(id):
-        __QUATRA__[f"FREEZE_LIMIT_{id}"] += 1
-        if __QUATRA__[f"FREEZE_LIMIT_{id}"] >= 3:
+        # Eğer key yoksa varsayılan 0 olarak başlat (Hata almamak için)
+        key = f"FREEZE_LIMIT_{id}"
+        __QUATRA__[key] = __QUATRA__.get(key, 0) + 1
+
+        if __QUATRA__[key] >= 3:
             bot_log(f"FREEZE_LIMIT_{id}: Donma limiti aşıldı geçiliyor")
             freeze_again()
+            reset_state('Ekran takıldı yeniden deneniyor...')
+            return
 
     # State değiştiyse state sayacını ve bildirim bayrağını sıfırla
     if STATE_MACHINE != previous_state:
@@ -575,11 +579,10 @@ def freeze_detect(email_text,platform,password_text):
         previous_state = STATE_MACHINE
         STATE_MACHINE_STUCK = False
         bot_action('çalışıyor')
-#         bot_log(STATE_MACHINE)
     else:
         STATE_MACHINE_COUNT += 1
 
-    # 5 defa aynı state'te kalındığı an (henüz max_state_retries'e varmadan) dondu tetikle
+    # 5 defa aynı state'te kalındığı an dondu tetikle
     if STATE_MACHINE_COUNT > 3 and not STATE_MACHINE_STUCK:
         bot_action('dondu')
         bot_popup(random.choice(freeze_variant))
@@ -590,36 +593,53 @@ def freeze_detect(email_text,platform,password_text):
     # State bazlı aşırı döngü (takılma) kontrolü
     if STATE_MACHINE_COUNT > STATE_MACHINE_MAX_COUNT:
         bot_error()
-        # Özel durumlar
-        if STATE_MACHINE in ["LIT_GOOGLE_SELECT_WAIT","LIT_FACEBOOK_SELECT_WAIT", "LIT_APP_INIT", "LIT_ACCOUNT"]:
+
+        # 1. GOOGLE/APP INIT ÖZEL DURUMU (Facebook çıkarıldı)
+        if STATE_MACHINE in ["LIT_GOOGLE_SELECT_WAIT"]:
             freeze_limit_count(1)
             root_code('pm clear --user 0 com.litatom.app')
             time_sleep(1.0, 1.5)
-            root_code('am start -n com.litatom.app/com.lit.app.ui.login.GoogleLoginActivity' if "google" in p_lower else 'am start -n com.litatom.app/com.lit.app.ui.MainActivity')
-            STATE_MACHINE = "LIT_GOOGLE_SELECT_WAIT" if "google" in p_lower else "LIT_APP_INIT"
+            root_code('am start -n com.litatom.app/com.lit.app.ui.login.GoogleLoginActivity')
+            STATE_MACHINE = "LIT_GOOGLE_SELECT_WAIT"
             freeze_reset()
             return
-        elif STATE_MACHINE == "LIT_FACEBOOK_SELECT_WAIT":
+
+        # 2. FACEBOOK ÖZEL DURUMU (Artık ilk if'e takılmıyor)
+        elif STATE_MACHINE in ["LIT_FACEBOOK_SELECT_WAIT", "LIT_APP_INIT", "LIT_ACCOUNT"]:
             freeze_limit_count(2)
             root_code('am start -n com.litatom.app/com.lit.app.ui.MainActivity')
             STATE_MACHINE = "LIT_APP_INIT"
             freeze_reset()
-            return
+            return # İşlem bitti, çık
+
+        # 3. POST ÖZEL DURUMU
         elif STATE_MACHINE in ["LIT_POST", "LIT_POST_CONTROLLER"]:
             freeze_limit_count(3)
             bot_log('Paylaşım ekranı yenileniyor...')
             root_code('am start -n com.litatom.app/com.lit.app.post.feedpublish.FeedPublishActivity')
             STATE_MACHINE = "LIT_POST"
             freeze_reset()
-            return
+            return # İşlem bitti, çık
+
+        # 4. VPN ÖZEL DURUMU
         elif STATE_MACHINE == "VPN":
             freeze_limit_count(4)
             bot_log('VPN sayfası açılıyor...')
             root_code('am start -n app.ninjavpn.android/.app.Dashboard')
             freeze_reset()
-            return
+            return # İşlem bitti, çık
+
+        elif STATE_MACHINE == "LIT_ACCOUNT":
+            freeze_limit_count(5)
+            root_code('am start -n com.litatom.app/com.lit.app.ui.MainActivity')
+            freeze_reset()
+            return # İşlem bitti, çık
+
+        # 6. TANIMLANMAYAN DİĞER BÜTÜN STATELER İÇİN
         else:
             freeze_again()
+            reset_state('Ekran takıldı yeniden deneniyor...')
+            return
 
 def apps_automation(active_list, platform, setting_name, setting_text, setting_vpn, email_text,password_text,setting_posts):
     global STATE_MACHINE,STATE_MACHINE_TEST,_cached_ip
@@ -812,8 +832,11 @@ def apps_automation(active_list, platform, setting_name, setting_text, setting_v
 
                 # 0.1. Google Hesap Seçim Ekranı Kontrolü
                 elif STATE_MACHINE == "LIT_GOOGLE_SELECT_WAIT":
-                    if "hesap" in text_lower or "devam etmek" in text_lower or "baska hesap" in text_lower:
-                        tap_at(296, 708)
+                    if any(x in text_lower for x in ["uygulamanin gizlilik politikasi", "litmatch ile paylasacaktir", "politikasi", "hesap", "devam etmek", "baska hesap"]):
+                        if "politikasi" in text_lower or "litmatch ile paylasacaktir" in text_lower:
+                            tap_at(278,669)
+                        else:
+                            tap_at(296, 708)
                         bot_popup('Hesap seçildi!')
                         time_sleep(1.0, 1.5)
                         STATE_MACHINE = "LIT_ACCOUNT"
@@ -1152,14 +1175,16 @@ def run_automation(email_text, password_text, platform, active_list, setting_nam
                         root_code('am start -n com.litatom.app/com.lit.app.ui.login.GoogleLoginActivity')
                         STATE_MACHINE = "APP_INIT"
                 else:
+                    freeze_reset()
                     __QUATRA__['google_app_unknown_error'] += 1
                     bot_log(f"GOOGLE_APP_UNKNOWN_ERROR: {__QUATRA__['google_app_unknown_error']}")
 
                 if __QUATRA__['google_app_unknown_error'] >= 5:
                     freeze_reset()
                     __SIGNALS__['google_app_unknown_bypass'] = True
-                    __SIGNALS__['google_app_unknown_bypass_flag'] = True
-                    __QUATRA__['google_app_unknown_error'] = 0
+                    if __QUATRA__['google_app_unknown_error'] >= 6:
+                        __SIGNALS__['google_app_unknown_bypass_flag'] = True
+                        __QUATRA__['google_app_unknown_error'] = 0
                     bot_log("__SIGNALS__['google_app_unknown_bypass'] = True")
                     bot_log('Bilinmeyen bir ekranla karşılaşıldı olası sorun çözülmeye çalışılıyor.')
                 elif __QUATRA__['google_app_unknown_error'] >= 3 and __SIGNALS__['google_app_unknown_bypass_flag']:
@@ -1232,14 +1257,17 @@ def run_automation(email_text, password_text, platform, active_list, setting_nam
             elif ("kodu gir" in screen_text or "bu kodu alman birkag dakika siirebilir" in screen_text or "yeni bir kod al" in screen_text) and STATE_MACHINE == "FACEBOOK_LOGİN_APPROVAL":
                 reset_state(f"{email_text} - Facebook Kodu girilmemiş")
                 break
-            elif "size bildirim" in screen_text or "istiyor izin ver" in screen_text:
-                tap_at(430, 822)
-                freeze_reset()
-            elif "facebook uygulamada daha iyi" in screen_text or "uygulamayi indir" in screen_text:
-                tap_at(415, 1224)
-                freeze_reset()
             elif "hesabinizi kapattik" in screen_text or "topluluk standartlari" in screen_text:
                 reset_state(f"{email_text} - Hesap facebook tarafından kapatılmış")
+                break
+            elif "hesabini kullanmak igin insan" in screen_text or "insan oldugunu onayla" in screen_text:
+                reset_state(f"{email_text} - Facebook hesabı askıya alınmış")
+                break
+            elif "baska bir cihazda giris yap" in screen_text or "giris yapmana izin veremiyoruz" in screen_text:
+                reset_state(f"{email_text} - Facebook cihaz doğrulaması istiyor.")
+                break
+            elif "whatsapp mesajlarini kontrol et" in screen_text or "whatsapp hesabina" in screen_text:
+                reset_state(f"{email_text} - Facebook Whatsapp doğrulaması istiyor.")
                 break
             elif ("adi yanlis" in screen_text or "adi bulunamad" in screen_text) and STATE_MACHINE == "FACEBOOK_LOGİN_APPROVAL":
                 reset_state(f"{email_text} - Facebook kullanıcı adı yanlış")
@@ -1250,6 +1278,10 @@ def run_automation(email_text, password_text, platform, active_list, setting_nam
             elif "ben robot degilim" in screen_text or "recaptcha" in screen_text:
                 reset_state(f"{email_text} - Facebook hesabı robot oldu")
                 break
+            elif "chrome bildirimleri" in screen_text or "medya denetimlerini" in screen_text:
+                tap_at(694, 908)
+            elif "gerez kullanimina izin" in screen_text or "Diger sirketlerin gerezleri" in screen_text:
+                tap_at(123, 1158)
             elif "bu siteye ulagilamiyor" in screen_text or "ip adresi bulunamadi" in screen_text:
                 tap_at(415, 1224)
                 freeze_reset()
@@ -1308,7 +1340,42 @@ def run_automation(email_text, password_text, platform, active_list, setting_nam
 
             elif STATE_MACHINE == "FACEBOOK_LOGİN_APPROVAL":
                 # Başarılı Giriş Durumu
-                if "bir fotograf veya video paylas ya da bir seyler yaz" in screen_text or "bir fotograf veya video paylas" in screen_text or "fotograf paylas" in screen_text or "bir seyler yaz" in screen_text or "takip et" in screen_text or "size bildirim" in screen_text or "istiyor izin ver" in screen_text or "follow" in screen_text or "create story" in screen_text or "facebook uygulamada daha iyi" in screen_text or "uygulamayi indir" in screen_text or "facebook is better on the app" in screen_text or "giris bilgilerin kaydedilsin" in screen_text or "bir daha giris yaparken bilgilerini girmen gerekmeyecek" in screen_text or "Baglantida kalmak icin bildirimleri ag" in screen_text:
+                FACEBOOK_LOGIN_KEYS = [
+                    "fotograf paylas",
+                    "hikaye olustur",
+
+                    "geg",
+                    "baglantida kalmak igin bildirimleri ag",
+                    "bildirimleri ag",
+                    "arkadaslarini ekle",
+                    "arkadas olarak eklemek istedigin",
+                    "kisileri seg",
+                    "profil resmi ekle",
+                    "profil resmi ekleyerek",
+                    "facebook uygulamasini indir",
+                    "uygulamayi indir",
+                    "tam deneyimi uygulamada yasa",
+                    "uygulamada yasa",
+                    "bildirimleri etkinlestir",
+                    "arkadas ekle",
+                    "gönderi görmek",
+
+                    "bir seyler yaz",
+                    "takip et",
+                    "gerez",
+                    "size bildirim",
+                    "istiyor izin ver",
+                    "follow",
+                    "create story",
+                    "facebook uygulamada daha iyi",
+                    "facebook is better on the app",
+                    "giris bilgilerin kaydedilsin",
+                    "kaydedilsin",
+                    "save",
+                    "bir daha giris yaparken bilgilerini girmen gerekmeyecek",
+                ]
+
+                if any(keyword in screen_text for keyword in FACEBOOK_LOGIN_KEYS):
                     STATE_MACHINE = "DONE"
 
                 # Giriş Sayfası Halen Duruyorsa (Hatalı Giriş veya Yüklenememe)
@@ -1464,6 +1531,7 @@ def baslat():
 
                     # Ekran kontrolleri
                     screen_controller()
+                    bot_action('çalışıyor')
                     genel_ayarlar = get_general_settings()
                     platform = str(hesap.get("platform", "google"))
                     email_val = str(hesap.get("user", ""))
