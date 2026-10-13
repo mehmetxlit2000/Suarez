@@ -24,7 +24,7 @@ _su_process = None
 _cached_ip = ""
 __QUATRA__ = defaultdict(int)
 __SIGNALS__ = defaultdict(bool)
-BOT_LOG = False
+BOT_LOG = True
 STATE_ROBOT_CONTROL = False
 STATE_MACHINE_TEST = False
 STATE_MACHINE = "APP_INIT"
@@ -788,6 +788,9 @@ def apps_automation(active_list, platform, setting_name, setting_text, setting_v
                 elif "hesabinizi kapattik" in screen_text or "topluluk standartlari" in screen_text:
                     reset_state(f"{email_text} - Hesap facebook tarafından kapatılmış")
                     break
+                elif "kullanmak igin insan" in screen_text or "insan oldugunu onayla" in screen_text or "30 saniye siirer" in screen_text or "30 second" in screen_text:
+                    reset_state(f"{email_text} - Facebook hesabı askıya alınmış")
+                    break
                 elif "hatirlatma" in text_lower or "topluluk kuralları" in text_lower or "ihlal" in text_lower:
                     bot_log('LIT_BAN')
                     bot_action("ban")
@@ -1260,10 +1263,10 @@ def run_automation(email_text, password_text, platform, active_list, setting_nam
             elif "hesabinizi kapattik" in screen_text or "topluluk standartlari" in screen_text:
                 reset_state(f"{email_text} - Hesap facebook tarafından kapatılmış")
                 break
-            elif "hesabini kullanmak igin insan" in screen_text or "insan oldugunu onayla" in screen_text:
+            elif "kullanmak igin insan" in screen_text or "insan oldugunu onayla" in screen_text or "30 saniye siirer" in screen_text or "30 second" in screen_text:
                 reset_state(f"{email_text} - Facebook hesabı askıya alınmış")
                 break
-            elif "baska bir cihazda giris yap" in screen_text or "giris yapmana izin veremiyoruz" in screen_text:
+            elif "baska bir cihazda giris yap" in screen_text or "giris yapmana izin veremiyoruz" in screen_text or "alternatif bir cihaz" in screen_text or "giivenlik nedeniyle giris yapmana" in screen_text:
                 reset_state(f"{email_text} - Facebook cihaz doğrulaması istiyor.")
                 break
             elif "whatsapp mesajlarini kontrol et" in screen_text or "whatsapp hesabina" in screen_text:
