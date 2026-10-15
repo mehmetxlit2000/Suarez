@@ -819,10 +819,9 @@ def apps_automation(active_list, platform, setting_name, setting_text, setting_v
                         else:
                             tap_at(401, 951)
                             time_sleep(0.1, 0.3)
-                    if "lit sunlara erigim istiyor" in text_lower or "erigim istiyor" in text_lower or "olarak devam et" in text_lower or "lit will receive ongoing" in text_lower or "continue" in text_lower or "ingilizce" in screen_text or "sayfa cevrildi" in screen_text:
-                        STATE_MACHINE = "LIT_FACEBOOK_SELECT_WAIT"
                     elif "dogrudan giris yap" in text_lower or "giris yaptiginiz hesabi secin" in text_lower or "hesabi secin" in text_lower:
                         tap_at(401, 440)
+                        STATE_MACHINE_COUNT = 0
                     elif "litmatch siirekli olarak duruyor" in text_lower or "uygulamayi kapat" in text_lower:
                         tap_at(347,1224)
                         time_sleep(1,2)
@@ -832,6 +831,8 @@ def apps_automation(active_list, platform, setting_name, setting_text, setting_v
                         time_sleep(2, 2)
                         root_code('am start -n com.litatom.app/com.lit.app.ui.MainActivity')
                         freeze_reset()
+                    if "lit sunlara erigim istiyor" in text_lower or "erigim istiyor" in text_lower or "giris yaptin" in text_lower or "devam etmek" in text_lower or "olarak devam et" in text_lower or "lit will receive ongoing" in text_lower or "continue" in text_lower or "ingilizce" in screen_text or "sayfa cevrildi" in screen_text:
+                        STATE_MACHINE = "LIT_FACEBOOK_SELECT_WAIT"
 
                 # 0.1. Google Hesap Seçim Ekranı Kontrolü
                 elif STATE_MACHINE == "LIT_GOOGLE_SELECT_WAIT":
@@ -892,6 +893,7 @@ def apps_automation(active_list, platform, setting_name, setting_text, setting_v
                     time_sleep(3,3)
                     if "bilgileri doldurun" in text_lower or "onaylandiktan sonra" in text_lower or "cinsiyet" in text_lower or "kullanici adin" in text_lower or "kadin" in text_lower:
                         if not __SIGNALS__['name_typed']:
+                            time_sleep(0.3, 0.5)
                             tap_at(375, 427)
                             time_sleep(0.3, 0.5)
                             type_text(setting_name)
